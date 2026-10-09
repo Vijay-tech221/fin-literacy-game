@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Investment Rain</title>
+<style>
+:root{--font-sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --bg:#07070f;--panel:#0d0d1a;--card:#161628;--line:#2a2a3e;--accent:#1D9E75;--mint:#5DCAA5}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+html,body{background:var(--bg);min-height:100%;font-family:var(--font-sans);color:#fff}
+body{overscroll-behavior:none}
+
+/* ---------- Layout: desktop = game + side panel, mobile = full-screen game ---------- */
+#app{display:flex;gap:20px;justify-content:center;align-items:flex-start;padding:20px;max-width:1180px;margin:0 auto}
+#game{flex:1;max-width:780px;min-width:0;background:var(--panel);border:1.5px solid var(--line);border-radius:24px;overflow:hidden;display:flex;flex-direction:column}
+#side{width:300px;flex-shrink:0;display:flex;flex-direction:column;gap:14px;max-height:calc(100vh - 40px);overflow-y:auto;position:sticky;top:20px}
+@media (max-width:899px){
+  #app{padding:0;gap:0;display:block}
+  #game{max-width:none;border:none;border-radius:0;min-height:100dvh}
+  #side{display:none}
+}
+
+#top-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 16px 8px}
+.hud-pill{background:var(--card);border-radius:20px;padding:6px 14px;display:flex;flex-direction:column;align-items:center;min-width:64px}
+.hud-label{font-size:10px;color:#888;letter-spacing:.5px;text-transform:uppercase}
+.hud-val{font-size:20px;font-weight:600;color:#fff;line-height:1.1}
+.hud-mid{display:flex;flex-direction:column;align-items:center;gap:4px}
+#title-sm{font-size:13px;font-weight:700;color:var(--mint);letter-spacing:.5px}
+#lives-row{display:flex;gap:5px;align-items:center}
+.h{width:18px;height:18px}
+.hud-right{display:flex;gap:8px;align-items:center}
+#pause-btn{width:38px;height:38px;border-radius:50%;background:var(--card);border:1.5px solid var(--line);color:#ccc;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+#pause-btn:hover{border-color:var(--mint);color:#fff}
+#stage{position:relative}
+#cv{display:block;width:100%;touch-action:none;cursor:none}
+#bottom-bar{padding:10px 16px 16px;display:flex;gap:10px;align-items:center;justify-content:center;padding-bottom:max(16px,env(safe-area-inset-bottom))}
+.ctrl-btn{width:72px;height:52px;background:var(--card);border:1.5px solid var(--line);border-radius:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;touch-action:none}
+.ctrl-btn:active{background:#222240}
+.arrow-l{width:0;height:0;border-top:10px solid transparent;border-bottom:10px solid transparent;border-right:16px solid var(--mint)}
+.arrow-r{width:0;height:0;border-top:10px solid transparent;border-bottom:10px solid transparent;border-left:16px solid var(--mint)}
+#key-hint{display:none;font-size:11px;color:#777;white-space:nowrap}
+@media (hover:hover) and (pointer:fine){ .ctrl-btn{display:none} #key-hint{display:block} }
+#lvl-bar{height:5px;background:var(--card);flex:1;border-radius:3px;overflow:hidden}
+#lvl-prog{height:100%;width:0;background:var(--accent);border-radius:3px;transition:width .3s,background .3s}
+#lvl-tag{font-size:12px;color:var(--mint);white-space:nowrap;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+#lvl-next{font-size:11px;color:#777;white-space:nowrap}
+
+/* ---------- Side panel (desktop) ---------- */
+.panel{background:var(--panel);border:1.5px solid var(--line);border-radius:20px;padding:16px}
+.panel h3{font-size:14px;color:#fff;margin-bottom:4px}
+.panel .sub{font-size:12px;color:#888;margin-bottom:12px;line-height:1.45}
+.guide-item{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid #1e1e33}
+.guide-item:first-of-type{border-top:none}
+.guide-item img{width:34px;height:34px;flex-shrink:0}
+.guide-item .lock{width:34px;height:34px;border-radius:50%;background:var(--card);border:1.5px dashed #3a3a55;color:#666;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.guide-item b{font-size:13px;display:block}
+.guide-item .eff{font-size:11px;font-weight:700}
+.guide-item p{font-size:11.5px;color:#aaa;line-height:1.4;margin-top:2px}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:8px 10px;font-size:12.5px;color:#bbb;align-items:center}
+kbd{background:var(--card);border:1px solid #3a3a55;border-bottom-width:2px;border-radius:6px;padding:2px 7px;font-size:11px;color:#fff;font-family:var(--font-sans);white-space:nowrap}
+
+/* ---------- Start / end overlay ---------- */
+#overlay{position:absolute;inset:0;background:rgba(13,13,26,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:30;padding:22px;overflow-y:auto}
+#overlay > *{max-width:440px;width:100%}
+#overlay h2{font-size:28px;font-weight:700;color:#fff;text-align:center}
+#overlay p{font-size:13.5px;color:#aaa;text-align:center;line-height:1.55}
+.main-btn{background:var(--accent);color:#fff;border:none;border-radius:20px;padding:14px 44px;font-size:16px;font-weight:600;font-family:var(--font-sans);cursor:pointer;max-width:240px!important;align-self:center}
+.main-btn:hover{background:#17b386}.main-btn:active{background:#0F6E56}
+.badge-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.badge{font-size:11px;padding:4px 10px;border-radius:12px;font-weight:600}
+.bg{background:#0F6E5622;color:var(--mint);border:1px solid #1D9E7544}
+.br{background:#E24B4A22;color:#F07170;border:1px solid #E24B4A44}
+.ba{background:#EF9F2722;color:#F5B94F;border:1px solid #EF9F2744}
+.lvl-list{display:flex;flex-direction:column;gap:6px}
+.lvl-row{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:12px;padding:7px 10px}
+.lvl-num{width:24px;height:24px;border-radius:50%;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.lvl-name{font-size:12.5px;color:#fff;font-weight:600}
+.lvl-icons{display:flex;gap:3px;margin-left:auto}
+.lvl-icons img{width:20px;height:20px}
+.lesson{display:flex;gap:10px;align-items:flex-start;background:var(--card);border-radius:12px;padding:8px 10px;text-align:left}
+.lesson img{width:30px;height:30px;flex-shrink:0}
+.lesson b{color:#fff;font-size:13px;display:block}
+.lesson span{color:#aaa;font-size:12px;line-height:1.45}
+
+/* ---------- Subtle "new object" callout (follows the falling object) ---------- */
+#callout{position:absolute;left:0;top:0;z-index:12;width:224px;background:rgba(18,18,34,.9);backdrop-filter:blur(4px);
+  border:1px solid #2e2e48;border-left:3px solid var(--k,#5DCAA5);border-radius:12px;padding:9px 11px 8px;
+  opacity:0;transition:opacity .3s;pointer-events:none;cursor:pointer}
+#callout.show{opacity:1;pointer-events:auto}
+#callout .c-head{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+#callout .c-new{font-size:9px;font-weight:800;letter-spacing:.8px;color:var(--k);background:color-mix(in srgb,var(--k) 18%,transparent);padding:2px 6px;border-radius:6px}
+#callout .c-name{font-size:13px;font-weight:700;color:#fff}
+#callout .c-eff{font-size:11px;font-weight:700;color:var(--k);margin-bottom:3px}
+#callout .c-desc{font-size:11.5px;line-height:1.42;color:#c4c4d4}
+#callout .c-bar{height:2px;background:#2a2a44;border-radius:2px;margin-top:7px;overflow:hidden}
+#callout .c-bar i{display:block;height:100%;width:100%;background:var(--k);transform-origin:left}
+@media (max-width:480px){#callout{width:188px;padding:8px 9px 7px}#callout .c-desc{font-size:11px}}
+
+/* ---------- Small toasts (level up, life lost) ---------- */
+#toasts{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:14;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;width:92%}
+.toast{background:rgba(18,18,34,.88);backdrop-filter:blur(4px);border:1px solid #2e2e48;border-radius:999px;padding:6px 14px;
+  font-size:12.5px;color:#ddd;text-align:center;max-width:100%;opacity:0;transform:translateY(-6px);transition:opacity .3s,transform .3s}
+.toast.show{opacity:1;transform:none}
+.toast b{color:var(--k,#fff)}
+.toast small{display:block;color:#9a9ab0;font-size:11px;margin-top:1px}
+</style>
+</head>
+<body>
+<div id="app">
+  <main id="game">
+    <div id="top-bar">
+      <div class="hud-pill"><span class="hud-label">Score</span><span class="hud-val" id="sv">0</span></div>
+      <div class="hud-mid"><div id="title-sm">INVESTMENT RAIN</div><div id="lives-row"></div></div>
+      <div class="hud-right">
+        <div class="hud-pill"><span class="hud-label">Caught</span><span class="hud-val" id="cv2">0</span></div>
+        <button id="pause-btn" title="Pause (P)" aria-label="Pause">❚❚</button>
+      </div>
+    </div>
+
+    <div id="stage">
+      <canvas id="cv"></canvas>
+      <div id="toasts"></div>
+      <div id="callout"></div>
+      <div id="overlay"></div>
+    </div>
+
+    <div id="bottom-bar">
+      <div class="ctrl-btn" id="btn-l"><div class="arrow-l"></div></div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:5px;align-items:stretch;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 2px">
+          <span id="lvl-tag">Level 1/5</span>
+          <span id="key-hint">Mouse or ← → to move · P to pause</span>
+          <span id="lvl-next"></span>
+        </div>
+        <div id="lvl-bar"><div id="lvl-prog"></div></div>
+      </div>
+      <div class="ctrl-btn" id="btn-r"><div class="arrow-r"></div></div>
+    </div>
+  </main>
+
+  <aside id="side">
+    <div class="panel">
+      <h3>Field Guide</h3>
+      <div class="sub">Objects unlock as you meet them. Learn what helps and what hurts your portfolio.</div>
+      <div id="guide"></div>
+    </div>
+    <div class="panel">
+      <h3>Controls</h3>
+      <div class="keys" style="margin-top:10px">
+        <span><kbd>Mouse</kbd></span><span>Move the basket</span>
+        <span><kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd></span><span>Move the basket</span>
+        <span><kbd>P</kbd> / <kbd>Esc</kbd></span><span>Pause / resume</span>
+        <span><kbd>Enter</kbd></span><span>Continue / start</span>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* =====================================================================
+   1. ICONS — simple white glyphs on a coloured disc (64×64 SVG)
+   ===================================================================== */
+const GLYPHS = {
+  equity:`<rect x="17" y="38" width="7" height="9" fill="#fff" stroke="none" rx="1"/><rect x="28.5" y="32" width="7" height="15" fill="#fff" stroke="none" rx="1"/><rect x="40" y="26" width="7" height="21" fill="#fff" stroke="none" rx="1"/><polyline points="15,30 26,21 32,25 46,14"/><polyline points="39,14 46,14 46,21"/>`,
+  bond:`<rect x="18" y="14" width="28" height="36" rx="3"/><line x1="24" y1="23" x2="40" y2="23"/><line x1="24" y1="30" x2="40" y2="30"/><line x1="24" y1="37" x2="32" y2="37"/><circle cx="39" cy="42" r="4" fill="#fff"/>`,
+  fd:`<polygon points="14,26 32,15 50,26" fill="#fff"/><line x1="20" y1="30" x2="20" y2="43"/><line x1="28" y1="30" x2="28" y2="43"/><line x1="36" y1="30" x2="36" y2="43"/><line x1="44" y1="30" x2="44" y2="43"/><line x1="14" y1="48" x2="50" y2="48"/>`,
+  mf:`<circle cx="30" cy="34" r="14"/><path d="M34 30 L34 14 A16 16 0 0 1 50 30 Z" fill="#fff"/><line x1="30" y1="34" x2="20" y2="44"/>`,
+  gold:`<polygon points="11,48 16,39 29,39 32,48" fill="#fff" stroke-width="2"/><polygon points="32,48 35,39 48,39 53,48" fill="#fff" stroke-width="2"/><polygon points="21,36 26,27 38,27 43,36" fill="#fff" stroke-width="2"/><line x1="40" y1="16" x2="40" y2="22" stroke-width="2.5"/><line x1="37" y1="19" x2="43" y2="19" stroke-width="2.5"/>`,
+  etf:`<rect x="14" y="16" width="36" height="32" rx="5"/><polyline points="19,40 26,32 32,36 39,25 45,28"/><line x1="19" y1="22" x2="27" y2="22" stroke-width="3"/>`,
+  reit:`<rect x="18" y="15" width="17" height="33"/><rect x="35" y="27" width="11" height="21"/><g fill="#fff" stroke="none"><rect x="22" y="20" width="3.5" height="3.5"/><rect x="28" y="20" width="3.5" height="3.5"/><rect x="22" y="27" width="3.5" height="3.5"/><rect x="28" y="27" width="3.5" height="3.5"/><rect x="22" y="34" width="3.5" height="3.5"/><rect x="28" y="34" width="3.5" height="3.5"/><rect x="39" y="32" width="3.5" height="3.5"/><rect x="39" y="39" width="3.5" height="3.5"/></g><line x1="13" y1="48" x2="51" y2="48"/>`,
+  crypto:`<polygon points="32,14 48,23 48,41 32,50 16,41 16,23"/><polyline points="16,23 32,32 48,23"/><line x1="32" y1="32" x2="32" y2="50"/>`,
+  commodity:`<path d="M32 13 C32 13 19 29 19 37 A13 13 0 0 0 45 37 C45 29 32 13 32 13 Z" fill="#fff"/><path d="M26 38 A6 6 0 0 0 31 44" stroke="#00000055" stroke-width="3"/>`,
+  sip:`<path d="M19 28 A14 14 0 0 1 44 22"/><polyline points="44,15 44,22 37,22"/><path d="M45 36 A14 14 0 0 1 20 42"/><polyline points="20,49 20,42 27,42"/><text x="32" y="38" font-family="Arial,sans-serif" font-size="15" font-weight="700" fill="#fff" stroke="none" text-anchor="middle">₹</text>`,
+  inflation:`<text x="25" y="44" font-family="Arial,sans-serif" font-size="26" font-weight="700" fill="#fff" stroke="none" text-anchor="middle">₹</text><line x1="44" y1="47" x2="44" y2="17"/><polyline points="37,24 44,17 51,24"/>`,
+  ponzi:`<polygon points="32,13 51,47 13,47"/><line x1="24" y1="32" x2="40" y2="32"/><line x1="19" y1="40" x2="45" y2="40"/><circle cx="32" cy="24" r="2.5" fill="#fff"/>`,
+  tips:`<path d="M20 15 H44 A6 6 0 0 1 50 21 V35 A6 6 0 0 1 44 41 H29 L20 49 V41 A6 6 0 0 1 14 35 V21 A6 6 0 0 1 20 15 Z"/><line x1="32" y1="21" x2="32" y2="30"/><circle cx="32" cy="35.5" r="2" fill="#fff"/>`,
+  advisor:`<circle cx="27" cy="23" r="7.5"/><path d="M13 47 C13 36 41 36 41 47"/><circle cx="44" cy="41" r="8" fill="#fff" stroke="none"/><line x1="40" y1="37" x2="48" y2="45" stroke="#b02a2a" stroke-width="3"/><line x1="48" y1="37" x2="40" y2="45" stroke="#b02a2a" stroke-width="3"/>`,
+  regorder:`<rect x="15" y="20" width="22" height="11" rx="2" transform="rotate(-40 26 25.5)" fill="#fff"/><line x1="31" y1="31" x2="47" y2="47" stroke-width="5"/><line x1="12" y1="50" x2="34" y2="50"/>`,
+  pump:`<polyline points="12,45 22,39 30,15 37,43 52,47"/><circle cx="30" cy="15" r="3" fill="#fff"/><polyline points="33,38 37,43 41,37"/>`,
+  forex:`<line x1="16" y1="25" x2="45" y2="25"/><polyline points="39,19 45,25 39,31"/><line x1="48" y1="39" x2="19" y2="39"/><polyline points="25,33 19,39 25,45"/><text x="31" y="21" font-family="Arial,sans-serif" font-size="9" font-weight="700" fill="#fff" stroke="none" text-anchor="middle">$</text><text x="33" y="52" font-family="Arial,sans-serif" font-size="9" font-weight="700" fill="#fff" stroke="none" text-anchor="middle">€</text>`,
+  phishing:`<circle cx="38" cy="14" r="3.5"/><path d="M38 18 V37 A9 9 0 0 1 20 37 V33"/><polyline points="16,37 20,31 24,37"/>`
+};
+function iconSVG(id,color){
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="${color}"/><circle cx="32" cy="32" r="28.5" fill="none" stroke="#ffffff" stroke-opacity=".35" stroke-width="2"/><g fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">${GLYPHS[id]}</g></svg>`;
+}
+function iconURL(id,color){ return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(iconSVG(id,color)); }
+
+/* =====================================================================
+   2. OBJECT CATALOGUE — each object unlocks at a level
+      kind: 'good' (adds points) | 'bad' (costs a life) | 'risky' (50/50)
+   ===================================================================== */
+const ITEMS = [
+  // Level 1 — Investing Basics
+  {id:'equity', lvl:1, kind:'good', pts:20, name:'Equity Shares', short:'Equity', color:'#1D9E75',
+   desc:'Owning a share means owning a small part of a company. Over the long term, equity can grow your wealth.'},
+  {id:'bond', lvl:1, kind:'good', pts:10, name:'Bonds', short:'Bond', color:'#378ADD',
+   desc:'A bond is a loan you give to a government or company. It pays regular interest — steady and lower risk.'},
+  {id:'fd', lvl:1, kind:'good', pts:8, name:'Fixed Deposit', short:'FD', color:'#3B6FB6',
+   desc:'Bank FDs pay a fixed, assured interest. Very safe, but returns may only just beat inflation.'},
+  {id:'inflation', lvl:1, kind:'bad', name:'Inflation', short:'Inflation', color:'#A32D2D',
+   desc:'Inflation silently reduces what your money can buy. Money left idle loses value every year.',
+   tip:'Invest so your returns stay ahead of rising prices.'},
+
+  // Level 2 — Diversify
+  {id:'mf', lvl:2, kind:'good', pts:25, name:'Mutual Fund', short:'MF', color:'#7F77DD',
+   desc:'A mutual fund is a collective investment product: it pools money from many investors and is managed by a professional fund manager. It diversifies and grows your portfolio.'},
+  {id:'gold', lvl:2, kind:'good', pts:14, name:'Gold', short:'Gold', color:'#C9952B',
+   desc:'Gold often holds its value when markets fall. A small allocation acts as a hedge in your portfolio.'},
+  {id:'ponzi', lvl:2, kind:'bad', name:'Ponzi Scheme', short:'Ponzi', color:'#C0392B',
+   desc:'Promises "guaranteed" high returns and pays old investors with new investors\' money. It always collapses.',
+   tip:'"Guaranteed high returns" is a red flag. Walk away.'},
+
+  // Level 3 — Market Products
+  {id:'etf', lvl:3, kind:'good', pts:12, name:'ETF', short:'ETF', color:'#2B9C8F',
+   desc:'An Exchange Traded Fund tracks an index such as the Nifty 50 and trades on the stock exchange like a share — low-cost diversification.'},
+  {id:'reit', lvl:3, kind:'good', pts:18, name:'REIT', short:'REIT', color:'#D4537E',
+   desc:'A Real Estate Investment Trust lets you invest in income-earning property (offices, malls) with a small amount. REITs are regulated by SEBI.'},
+  {id:'tips', lvl:3, kind:'bad', name:'Stock Tips', short:'Tips', color:'#D85A30',
+   desc:'Unsolicited "hot tips" on WhatsApp, Telegram or social media are often traps. Never invest based on tips.',
+   tip:'Do your own research — ignore unsolicited tips.'},
+
+  // Level 4 — Risky Waters
+  {id:'crypto', lvl:4, kind:'risky', pts:30, name:'Crypto', short:'Crypto', color:'#B7791F',
+   desc:'Crypto assets are unregulated — not regulated by SEBI or RBI. Prices swing wildly, so it could boost your portfolio or wipe out a life.'},
+  {id:'commodity', lvl:4, kind:'good', pts:15, name:'Commodity', short:'Commodity', color:'#5E7D3A',
+   desc:'Commodities like crude oil, metals and agri products trade on SEBI-regulated exchanges and help diversify beyond stocks and bonds.'},
+  {id:'regorder', lvl:4, kind:'bad', name:'Regulatory Order', short:'Reg. Order', color:'#993C1D',
+   desc:'When SEBI passes an order against a company or intermediary for violations, its investors can suffer. Check SEBI orders before you invest.',
+   tip:'Check SEBI orders against a company or intermediary before investing.'},
+  {id:'advisor', lvl:4, kind:'bad', name:'Unregistered Advisor', short:'Fake Advisor', color:'#B02A2A',
+   desc:'Only take advice from SEBI-registered Investment Advisers. Always verify registration on the SEBI website.',
+   tip:'Verify an adviser\'s SEBI registration before acting on advice.'},
+
+  // Level 5 — Expert Investor
+  {id:'sip', lvl:5, kind:'good', pts:30, name:'SIP', short:'SIP', color:'#0F8F6A',
+   desc:'A Systematic Investment Plan invests a fixed amount at regular intervals — building discipline and averaging your cost over time.'},
+  {id:'pump', lvl:5, kind:'bad', name:'Pump & Dump', short:'Pump & Dump', color:'#C2410C',
+   desc:'Fraudsters hype a stock to push its price up, then sell — leaving ordinary investors with heavy losses.',
+   tip:'Sudden hype around an unknown stock is a warning sign.'},
+  {id:'forex', lvl:5, kind:'bad', name:'Illegal Forex', short:'Illegal Forex', color:'#8E2A4F',
+   desc:'Forex trading on unauthorised online platforms is illegal in India. RBI publishes an Alert List of such platforms.',
+   tip:'Check the RBI Alert List before using any forex platform.'},
+  {id:'phishing', lvl:5, kind:'bad', name:'Phishing / KYC Fraud', short:'Phishing', color:'#9B1C1C',
+   desc:'Fake "KYC update" calls, SMS and links steal your money. Never share OTP, PIN or passwords with anyone.',
+   tip:'Never share OTP, PIN or passwords — not even for "KYC".'},
+];
+ITEMS.forEach(it=>{ it.img=new Image(); it.img.src=iconURL(it.id,it.color); it.url=it.img.src; });
+const byId = Object.fromEntries(ITEMS.map(i=>[i.id,i]));
+
+/* =====================================================================
+   3. LEVELS — 5 levels, each faster, more hazards, wilder movement
+   ===================================================================== */
+const LEVELS = [
+  {name:'Investing Basics', at:0,   speed:1.5, spread:0.3, spawn:66, bad:0.18, basket:100, moves:['straight']},
+  {name:'Diversify',        at:150, speed:2.1, spread:0.5, spawn:56, bad:0.22, basket:94,  moves:['straight','wobble','wobble']},
+  {name:'Market Products',  at:350, speed:2.7, spread:0.8, spawn:47, bad:0.26, basket:88,  moves:['wobble','sine','drift']},
+  {name:'Risky Waters',     at:600, speed:3.3, spread:1.1, spawn:39, bad:0.30, basket:82,  moves:['sine','drift','zigzag','curve']},
+  {name:'Expert Investor',  at:900, speed:3.9, spread:1.5, spawn:31, bad:0.34, basket:76,  moves:['zigzag','curve','bounce','spiral','chaos','chaos']},
+];
+const WIN_SCORE = 1300;
+
+/* =====================================================================
+   4. CANVAS SETUP (crisp on high-DPI screens)
+   ===================================================================== */
+const canvas=document.getElementById('cv'),ctx=canvas.getContext('2d');
+// Canvas size follows the screen: wide on desktop, full-height on mobile
+let CW=390,CH=520;const DPR=Math.min(2,window.devicePixelRatio||1);
+const FONT='system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif';
+const BH=22,R=23;let BY=CH-52;
+
+/* =====================================================================
+   5. STATE
+   ===================================================================== */
+let drops=[],particles=[],popups=[],basketX=CW/2,score=0,caught=0,lives=3,running=false,frame=0,level=1,lastSpawn=0,
+    screenShake=0,btnLHeld=false,btnRHeld=false,pauseState=null,seen=new Set(),newQueue=[],hitBy=[],BW=100,timeScale=1,slowmo=0,hitFlash=0,spawnClock=0,known=new Set();
+
+const $=id=>document.getElementById(id);
+const rand=(a,b)=>a+Math.random()*(b-a);
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const sign=()=>Math.random()<.5?-1:1;
+const L=()=>LEVELS[level-1];
+
+/* =====================================================================
+   6. MOVEMENT PATTERNS — wilder at each level
+   ===================================================================== */
+function makeMove(){
+  const k=level, type=pick(L().moves);
+  switch(type){
+    case'straight':return{type,amp:rand(.15,.4)};
+    case'wobble':  return{type,amp:.6+k*.25+rand(0,.5),f:rand(.06,.1)};
+    case'sine':    return{type,amp:1.2+k*.5+rand(0,1.2),f:rand(.04,.07)};
+    case'drift':   return{type,vx:sign()*rand(.4,1+k*.45)};
+    case'zigzag':  return{type,vx:sign()*(1.5+k*.45+rand(0,1.5)),timer:0,next:Math.floor(rand(14,40))};
+    case'curve':   return{type,vx:rand(-1,1)*(1.5+k*.4),ax:rand(-1,1)*.012*k};
+    case'bounce':  return{type,vx:sign()*(2+k*.5+rand(0,1.5))};
+    case'spiral':  return{type,angle:rand(0,Math.PI*2),sr:0};
+    case'chaos':   return{type,vx:0,timer:0};
+  }
+}
+function updateDrop(d,ts){
+  d.t+=ts; d.vy+=0.008*ts; d.y+=d.vy*ts;
+  const m=d.mv;
+  switch(m.type){
+    case'straight':d.x+=Math.sin(d.t*.05)*m.amp*ts;break;
+    case'wobble':case'sine':d.x+=Math.sin(d.t*m.f)*m.amp*ts;break;
+    case'drift':case'bounce':d.x+=m.vx*ts;if(d.x<=d.r||d.x>=CW-d.r)m.vx*=-1;break;
+    case'zigzag':m.timer+=ts;if(m.timer>=m.next){m.vx*=-1;m.timer=0;m.next=Math.floor(rand(12,40));}d.x+=m.vx*ts;
+                 if(d.x<=d.r||d.x>=CW-d.r)m.vx*=-1;break;
+    case'curve':m.vx=Math.max(-6,Math.min(6,m.vx+m.ax*ts));d.x+=m.vx*ts;if(d.x<=d.r||d.x>=CW-d.r){m.vx*=-1;m.ax*=-1;}break;
+    case'spiral':m.sr+=.1*ts;m.angle+=.14*ts;d.x+=Math.cos(m.angle)*m.sr*.22*ts;break;
+    case'chaos':
+      m.timer-=ts;if(m.timer<=0){m.vx=rand(-3.8,3.8);d.vy=Math.max(2.2,d.baseVy+rand(-1,1.8));m.timer=Math.floor(rand(12,40));}
+      d.x+=m.vx*ts;if(d.x<=d.r||d.x>=CW-d.r)m.vx*=-1;break;
+  }
+  d.x=Math.max(d.r,Math.min(CW-d.r,d.x));
+  d.trail.push({x:d.x,y:d.y});if(d.trail.length>10)d.trail.shift();
+}
+
+/* =====================================================================
+   7. SPAWNING + "first appearance" info card
+   ===================================================================== */
+function chooseItem(){
+  // introduce newly unlocked objects one at a time
+  const waiting=drops.some(d=>d.isNew&&!d.introduced);
+  if(newQueue.length && !intro && !waiting) return newQueue.shift();
+  const pool=ITEMS.filter(i=>i.lvl<=level&&seen.has(i.id));
+  const bads=pool.filter(i=>i.kind==='bad'), goods=pool.filter(i=>i.kind==='good'), risky=pool.filter(i=>i.kind==='risky');
+  const r=Math.random();
+  if(bads.length && r<L().bad) return pick(bads);
+  if(risky.length && r<L().bad+.12) return pick(risky);
+  return goods.length?pick(goods):null;
+}
+function spawnDrop(){ const it=chooseItem(); if(it) launch(it); }
+function launch(it){
+  const vy=L().speed+rand(0,L().spread);
+  const isNew=!seen.has(it.id);
+  if(isNew) seen.add(it.id);   // reserved: won't be picked again until introduced
+  drops.push({item:it,x:rand(R+4,CW-R-4),y:-R*2,vy:isNew?Math.min(vy,2.4):vy,baseVy:vy,r:R,
+              mv:isNew?{type:'straight',amp:.2}:makeMove(),t:0,trail:[],isNew,introduced:false});
+}
+
+/* The intro: once the new object is fully on screen, a small label attaches beside it
+   and the game drifts into slow motion until the label fades (or the player taps it). */
+let intro=null;            // {drop, total, left}
+const effText=it=>it.kind==='good'?`Catch it → +${it.pts} points`:it.kind==='bad'?'Avoid it → costs 1 life'
+                  :`Your call → +${it.pts} points or −1 life`;
+const kindColor=k=>k==='good'?'#5DCAA5':k==='bad'?'#F07170':'#F5B94F';
+function startIntro(d){
+  d.introduced=true;known.add(d.item.id);
+  const it=d.item, words=it.desc.split(' ').length;
+  const total=Math.min(390,150+words*7);          // frames (≈2.5s–6.5s)
+  intro={drop:d,total,left:total};
+  renderGuide();
+  const c=$('callout');
+  c.style.setProperty('--k',kindColor(it.kind));
+  c.innerHTML=`<div class="c-head"><span class="c-new">${it.kind==='bad'?'HAZARD':it.kind==='risky'?'RISKY':'NEW'}</span><span class="c-name">${it.name}</span></div>
+    <div class="c-eff">${effText(it)}</div><div class="c-desc">${it.desc}</div><div class="c-bar"><i></i></div>`;
+  positionCallout();
+  c.classList.add('show');
+}
+function endIntro(){
+  if(!intro)return;
+  intro=null;$('callout').classList.remove('show');
+}
+function positionCallout(){
+  if(!intro)return;
+  const d=intro.drop,c=$('callout'),w=c.offsetWidth,h=c.offsetHeight;
+  const right=d.x<CW/2;
+  let x=right?d.x+d.r+16:d.x-d.r-16-w;
+  x=Math.max(6,Math.min(CW-w-6,x));
+  const y=Math.max(50,Math.min(CH-h-70,d.y-h/2));   // stay below the toast strip
+  c.style.transform=`translate(${x}px,${y}px)`;
+  c.dataset.ax=right?x:x+w; c.dataset.ay=y+h/2;
+  c.querySelector('.c-bar i').style.transform=`scaleX(${intro.left/intro.total})`;
+}
+$('callout').addEventListener('click',endIntro);
+
+/* =====================================================================
+   8. EFFECTS
+   ===================================================================== */
+function addParticles(x,y,color,n){
+  for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=2+Math.random()*4;
+    particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,color,life:1,r:2+Math.random()*4});}
+}
+function addPopup(x,y,text,color){popups.push({x,y,text,color,life:1,vy:-1.5});}
+function toast(html,color,ms=2400){
+  const box=$('toasts'),el=document.createElement('div');
+  el.className='toast';el.style.setProperty('--k',color||'#fff');el.innerHTML=html;
+  box.appendChild(el);while(box.children.length>2)box.firstChild.remove();
+  requestAnimationFrame(()=>el.classList.add('show'));
+  setTimeout(()=>{el.classList.remove('show');setTimeout(()=>el.remove(),350);},ms);
+}
+function flashLevel(){
+  const n=ITEMS.filter(i=>i.lvl===level).length;
+  toast(`<b>Level ${level}</b> · ${L().name}${level>1?` <small>${n} new objects incoming — watch for their labels</small>`:''}`,LEVEL_TINT[level-1],2600);
+}
+
+/* =====================================================================
+   9. GAME LOOP
+   ===================================================================== */
+function basketWidth(){return Math.round(L().basket*Math.max(1,CW/520));}
+function setLevel(n){
+  level=n; BW=basketWidth();
+  newQueue=ITEMS.filter(i=>i.lvl===n && !seen.has(i.id)).sort(()=>Math.random()-.5);
+  renderHUD(); flashLevel();
+}
+function loseLife(d,title,tip){
+  lives--; screenShake=4;
+  addParticles(d.x,d.y,'#E24B4A',22);
+  try{navigator.vibrate&&navigator.vibrate([80,30,80]);}catch(e){}
+  if(!hitBy.includes(d.item.id))hitBy.push(d.item.id);
+  renderHUD();
+  if(lives<=0){gameOver();return true;}
+  hitFlash=1;slowmo=40;
+  toast(`<b>${title}</b> ${lives} ${lives===1?'life':'lives'} left${tip?`<small>${tip}</small>`:''}`,'#F07170',3200);
+  return false;
+}
+function update(){
+  frame++;
+  particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.life-=.032;p.vy+=.1;});
+  particles=particles.filter(p=>p.life>0);
+  if(pauseState)return;
+
+  const step=(6+level*.5)*Math.max(1,CW/450);
+  if(btnLHeld)basketX=Math.max(BW/2,basketX-step);
+  if(btnRHeld)basketX=Math.min(CW-BW/2,basketX+step);
+  basketX=Math.max(BW/2,Math.min(CW-BW/2,basketX));
+  if(screenShake>0)screenShake-=.7;
+
+  if(hitFlash>0)hitFlash-=.03;
+  // slow motion while a new object is being introduced, or briefly after a hit
+  let target=1;
+  if(intro){ if(--intro.left<=0||!drops.includes(intro.drop)) endIntro(); else target=.28; }
+  if(slowmo>0){slowmo--;target=Math.min(target,.5);}
+  timeScale+=(target-timeScale)*.12;
+  const ts=timeScale;
+
+  spawnClock+=ts;
+  if(spawnClock>L().spawn){spawnClock=0;spawnDrop();}
+
+  for(let i=drops.length-1;i>=0;i--){
+    const d=drops[i];updateDrop(d,ts);
+    if(d.isNew&&!d.introduced&&!intro&&d.y>=d.r+8) startIntro(d);
+    const dx=Math.abs(d.x-basketX),dy=Math.abs(d.y-(BY+BH/2));
+    if(dx<BW/2+d.r*.55&&dy<BH+d.r*.8){
+      const it=d.item;
+      if(intro&&intro.drop===d)endIntro();
+      if(it.kind==='bad'){ if(loseLife(d,`−1 life: ${it.name}.`,it.tip))return; }
+      else if(it.kind==='risky' && Math.random()<.5){
+        addPopup(d.x,d.y-30,'CRASH!','#E24B4A');
+        if(loseLife(d,'Crypto crashed.','Unregulated assets can lose value suddenly.'))return;
+      } else {
+        score+=it.pts;caught++;
+        addParticles(d.x,d.y,it.color,12);
+        addPopup(d.x,d.y-30,(it.kind==='risky'?'Crypto surge! ':'')+'+'+it.pts,it.kind==='risky'?'#F5B94F':'#9FE1CB');
+        try{navigator.vibrate&&navigator.vibrate(30);}catch(e){}
+        if(score>=WIN_SCORE){renderHUD();win();return;}
+        if(level<5 && score>=LEVELS[level].at) setLevel(level+1);
+        renderHUD();
+      }
+      drops.splice(i,1);continue;
+    }
+    if(d.y>CH+d.r*2){ if(d.isNew&&!d.introduced){d.introduced=true;known.add(d.item.id);renderGuide();} drops.splice(i,1); }
+  }
+  for(let i=popups.length-1;i>=0;i--){const p=popups[i];p.y+=p.vy*.8;p.life-=.026;if(p.life<=0)popups.splice(i,1);}
+}
+
+/* =====================================================================
+   10. DRAWING
+   ===================================================================== */
+const LEVEL_TINT=['#5DCAA5','#7F77DD','#378ADD','#EF9F27','#E24B4A'];
+function drawBG(){
+  ctx.fillStyle='#0d0d1a';ctx.fillRect(0,0,CW,CH);
+  const g=ctx.createLinearGradient(0,0,0,CH);
+  g.addColorStop(0,LEVEL_TINT[level-1]+'14');g.addColorStop(1,'#0d0d1a00');
+  ctx.fillStyle=g;ctx.fillRect(0,0,CW,CH);
+  if(level>=2){
+    ctx.strokeStyle=`rgba(93,202,165,${.02+level*.012})`;ctx.lineWidth=.5;
+    for(let x=0;x<CW;x+=36){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,CH);ctx.stroke();}
+    for(let y=0;y<CH;y+=36){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(CW,y);ctx.stroke();}
+  }
+  for(let i=0;i<60;i++){
+    const sx=(i*113+frame*.012*level)%CW,sy=(i*79+i*5)%CH;
+    ctx.fillStyle=`rgba(255,255,255,${.08+Math.sin(frame*.02+i)*.05})`;ctx.fillRect(sx,sy,1.5,1.5);
+  }
+}
+function hexA(a){return Math.floor(Math.max(0,Math.min(1,a))*255).toString(16).padStart(2,'0');}
+function drawDrop(d){
+  const it=d.item;
+  for(let i=1;i<d.trail.length;i++){
+    const f=i/d.trail.length;
+    ctx.beginPath();ctx.arc(d.trail[i].x,d.trail[i].y,d.r*f*.55,0,Math.PI*2);
+    ctx.fillStyle=it.color+hexA(f*.3);ctx.fill();
+  }
+  ctx.beginPath();ctx.arc(d.x,d.y,d.r+6,0,Math.PI*2);ctx.fillStyle=it.color+'22';ctx.fill();
+  if(it.kind!=='good'){
+    ctx.save();ctx.strokeStyle=it.kind==='bad'?'#E24B4A':'#F5B94F';ctx.lineWidth=1.8;
+    ctx.setLineDash([4,3]);ctx.lineDashOffset=-frame*.4;
+    ctx.beginPath();ctx.arc(d.x,d.y,d.r+6,0,Math.PI*2);ctx.stroke();ctx.restore();
+  }
+  if(it.img.complete) ctx.drawImage(it.img,d.x-d.r,d.y-d.r,d.r*2,d.r*2);
+  ctx.font=`600 10px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillStyle=it.kind==='bad'?'#F5A3A2':it.kind==='risky'?'#F5CB7A':'#CFF3E4';
+  ctx.fillText(it.short,d.x,d.y+d.r+8);
+}
+function drawBasket(){
+  ctx.save();
+  if(screenShake>0)ctx.translate((Math.random()-.5)*screenShake,(Math.random()-.5)*screenShake);
+  const bx=basketX-BW/2,by=BY;
+  ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx+BW,by);ctx.lineTo(bx+BW-10,by+BH);ctx.lineTo(bx+10,by+BH);ctx.closePath();
+  const g=ctx.createLinearGradient(bx,by,bx,by+BH);g.addColorStop(0,'#5DCAA5');g.addColorStop(1,'#0F6E56');
+  ctx.fillStyle=g;ctx.fill();ctx.strokeStyle='#9FE1CB';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#0d3b2e';ctx.font=`700 11px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('PORTFOLIO',basketX,by+BH/2+1);
+  ctx.beginPath();ctx.moveTo(basketX,by);ctx.lineTo(basketX,0);
+  ctx.strokeStyle='rgba(93,202,165,0.1)';ctx.lineWidth=1;ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([]);
+  ctx.restore();
+}
+function draw(){
+  ctx.save();
+  if(screenShake>0)ctx.translate((Math.random()-.5)*screenShake*.4,(Math.random()-.5)*screenShake*.4);
+  drawBG();
+  drops.forEach(drawDrop);
+  if(intro){
+    const d=intro.drop,c=$('callout');positionCallout();
+    const pulse=1+.5*Math.sin(frame*.15);
+    ctx.save();ctx.strokeStyle=kindColor(d.item.kind);ctx.globalAlpha=.75;ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(d.x,d.y,d.r+10+pulse*3,0,Math.PI*2);ctx.stroke();
+    ctx.globalAlpha=.45;ctx.lineWidth=1;ctx.beginPath();
+    ctx.moveTo(d.x+(+c.dataset.ax>d.x?d.r+10:-d.r-10),d.y);ctx.lineTo(+c.dataset.ax,+c.dataset.ay);ctx.stroke();ctx.restore();
+  }
+  if(hitFlash>0){
+    const g=ctx.createRadialGradient(CW/2,CH/2,Math.min(CW,CH)*.35,CW/2,CH/2,Math.max(CW,CH)*.75);
+    g.addColorStop(0,'rgba(226,75,74,0)');g.addColorStop(1,`rgba(226,75,74,${.35*hitFlash})`);
+    ctx.fillStyle=g;ctx.fillRect(0,0,CW,CH);
+  }
+  particles.forEach(p=>{ctx.save();ctx.globalAlpha=p.life;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=p.color;ctx.fill();ctx.restore();});
+  popups.forEach(p=>{ctx.save();ctx.globalAlpha=Math.max(0,p.life)*.9;ctx.fillStyle=p.color;
+    ctx.font=`600 12px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.fillText(p.text,p.x,p.y);ctx.restore();});
+  drawBasket();
+  if(pauseState==='user'){
+    ctx.fillStyle='rgba(13,13,26,0.7)';ctx.fillRect(0,0,CW,CH);
+    ctx.fillStyle='#fff';ctx.font=`700 30px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('Paused',CW/2,CH/2-12);
+    ctx.fillStyle='#aaa';ctx.font=`500 14px ${FONT}`;ctx.fillText('Press P or tap ▶ to resume',CW/2,CH/2+20);
+  }
+  ctx.restore();
+}
+function renderHUD(){
+  $('sv').textContent=score;$('cv2').textContent=caught;
+  $('lvl-tag').textContent=window.innerWidth<480?`Level ${level}/5`:`Level ${level}/5 · ${L().name}`;
+  const from=L().at,to=level<5?LEVELS[level].at:WIN_SCORE;
+  $('lvl-prog').style.width=Math.min(100,(score-from)/(to-from)*100)+'%';
+  $('lvl-prog').style.background=LEVEL_TINT[level-1];
+  $('lvl-next').textContent=level<5?`next at ${to}`:`goal ${to}`;
+  const lw=$('lives-row');lw.innerHTML='';
+  for(let i=0;i<3;i++){
+    lw.insertAdjacentHTML('beforeend',`<svg class="h" viewBox="-20 -16 40 36"><path d="M0,-5 C-10,-14 -20,-4 -10,6 L0,16 L10,6 C20,-4 10,-14 0,-5 Z" fill="${i<lives?'#E24B4A':'#2a2a3e'}"/></svg>`);
+  }
+}
+
+// fixed 60 updates/sec so speed is the same on 60Hz and 120Hz screens
+let acc=0,lastTs=0;
+function loop(ts){
+  if(!running)return;
+  if(!lastTs)lastTs=ts;
+  acc+=Math.min(100,ts-lastTs);lastTs=ts;
+  while(acc>=1000/60&&running){update();acc-=1000/60;}
+  draw();requestAnimationFrame(loop);
+}
+
+function fitCanvas(){
+  const stage=$('stage'),desktop=window.innerWidth>=900;
+  const w=Math.max(300,Math.round(stage.clientWidth));
+  const chrome=$('top-bar').offsetHeight+$('bottom-bar').offsetHeight;
+  const h=desktop?Math.max(460,Math.min(660,window.innerHeight-chrome-44))
+                 :Math.max(380,window.innerHeight-chrome);
+  const sx=w/CW, sy=h/CH;
+  drops.forEach(d=>{d.x*=sx;d.y*=sy;d.trail=[];});
+  basketX*=sx;
+  CW=w;CH=h;BY=CH-52;BW=basketWidth();
+  basketX=Math.max(BW/2,Math.min(CW-BW/2,basketX));
+  canvas.style.height=h+'px';
+  canvas.width=Math.round(CW*DPR);canvas.height=Math.round(CH*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  renderHUD();draw();
+}
+window.addEventListener('resize',fitCanvas);
+window.addEventListener('orientationchange',()=>setTimeout(fitCanvas,200));
+
+/* ---------- Pause (button, P / Esc, or switching tabs) ---------- */
+function togglePause(){
+  if(!running)return;
+  if(pauseState==='user'){pauseState=null;$('pause-btn').textContent='❚❚';}
+  else if(!pauseState){pauseState='user';$('pause-btn').textContent='▶';}
+}
+$('pause-btn').addEventListener('click',togglePause);
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&running&&!pauseState)togglePause();});
+
+/* ---------- Field Guide (desktop side panel) ---------- */
+function renderGuide(){
+  const effTxt=it=>it.kind==='good'?[`+${it.pts} points`,'#5DCAA5']:it.kind==='bad'?['−1 life','#F07170']:[`+${it.pts} or −1 life`,'#F5B94F'];
+  $('guide').innerHTML=ITEMS.map(it=>{
+    if(!known.has(it.id))return `<div class="guide-item"><div class="lock">?</div><div><b style="color:#666">Locked</b><p>Appears in Level ${it.lvl}</p></div></div>`;
+    const [t,c]=effTxt(it);
+    return `<div class="guide-item"><img src="${it.url}" alt=""><div><b>${it.name}</b><span class="eff" style="color:${c}">${t}</span><p>${it.desc}</p></div></div>`;
+  }).join('');
+}
+
+/* =====================================================================
+   11. SCREENS
+   ===================================================================== */
+function startScreen(){
+  const rows=LEVELS.map((lv,i)=>`<div class="lvl-row"><div class="lvl-num" style="background:${LEVEL_TINT[i]}">${i+1}</div>
+    <div class="lvl-name">${lv.name}</div><div class="lvl-icons">${ITEMS.filter(it=>it.lvl===i+1).map(it=>`<img src="${it.url}" alt="${it.name}" title="${it.name}">`).join('')}</div></div>`).join('');
+  $('overlay').innerHTML=`
+    <h2>Investment Rain</h2>
+    <div class="badge-row"><span class="badge bg">Catch investments</span><span class="badge br">Dodge hazards</span><span class="badge ba">Crypto = gamble</span></div>
+    <div class="lvl-list">${rows}</div>
+    <p>Move your portfolio basket by dragging or with the arrow buttons.<br>New objects appear each level — a short label explains each one as it falls. 3 hazards end the game. Reach <b style="color:#fff">${WIN_SCORE}</b> points to win!</p>
+    <button class="main-btn" data-action="start">Play</button>`;
+  $('overlay').style.display='flex';
+}
+function endScreen(won){
+  running=false;endIntro();$('toasts').innerHTML='';
+  const lessons=hitBy.map(id=>byId[id]).map(it=>`<div class="lesson"><img src="${it.url}" alt=""><div><b>${it.name}</b><span>${it.tip||'Unregulated assets can lose value suddenly.'}</span></div></div>`).join('');
+  $('overlay').innerHTML=`
+    <h2 style="color:${won?'#5DCAA5':'#E24B4A'}">${won?'Portfolio Champion! 🏆':'Portfolio Wiped!'}</h2>
+    <div class="badge-row"><span class="badge bg">Score: ${score}</span><span class="badge bg">Caught: ${caught}</span><span class="badge bg">Level: ${level}/5</span></div>
+    <p>${won?'You built a diversified portfolio and avoided the traps. Well done, smart investor!':'Three financial hazards destroyed your portfolio.'}</p>
+    ${lessons?`<p style="color:#fff;font-weight:600;margin-bottom:-6px">Lessons from what hit you</p>${lessons}`:''}
+    <button class="main-btn" data-action="start">Play Again</button>`;
+  $('overlay').style.display='flex';
+}
+function gameOver(){endScreen(false);}
+function win(){endScreen(true);}
+$('overlay').addEventListener('click',e=>{if(e.target.dataset.action==='start')startGame();});
+
+function startGame(){
+  drops=[];particles=[];popups=[];score=0;caught=0;lives=3;frame=0;lastSpawn=0;screenShake=0;
+  pauseState=null;seen=new Set();known=new Set();hitBy=[];basketX=CW/2;$('pause-btn').textContent='❚❚';renderGuide();
+  endIntro();$('toasts').innerHTML='';timeScale=1;slowmo=0;hitFlash=0;spawnClock=0;$('overlay').style.display='none';
+  setLevel(1);
+  running=true;acc=0;lastTs=0;requestAnimationFrame(loop);
+}
+
+/* =====================================================================
+   12. CONTROLS — drag / mouse / buttons / keyboard
+   ===================================================================== */
+function moveTo(clientX){
+  const rect=canvas.getBoundingClientRect();
+  basketX=Math.max(BW/2,Math.min(CW-BW/2,(clientX-rect.left)*(CW/rect.width)));
+}
+let dragging=false;
+canvas.addEventListener('pointerdown',e=>{dragging=true;moveTo(e.clientX);});
+canvas.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+canvas.addEventListener('pointermove',e=>{if(dragging||e.pointerType==='mouse')moveTo(e.clientX);});
+window.addEventListener('pointerup',()=>{dragging=false;btnLHeld=btnRHeld=false;});
+function holdBtn(el,setter){
+  el.addEventListener('pointerdown',e=>{e.preventDefault();setter(true);});
+  ['pointerup','pointerleave','pointercancel'].forEach(ev=>el.addEventListener(ev,()=>setter(false)));
+}
+holdBtn($('btn-l'),v=>btnLHeld=v);holdBtn($('btn-r'),v=>btnRHeld=v);
+window.addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if(k==='arrowleft'||k==='a'){btnLHeld=true;e.preventDefault();}
+  if(k==='arrowright'||k==='d'){btnRHeld=true;e.preventDefault();}
+  if(k==='p'||k==='escape')togglePause();
+  if(k==='enter'&&!running&&$('overlay').style.display!=='none'){e.preventDefault();startGame();return;}
+  if((e.key==='Enter'||e.key===' ')&&intro){e.preventDefault();endIntro();}
+});
+window.addEventListener('keyup',e=>{const k=e.key.toLowerCase();
+  if(k==='arrowleft'||k==='a')btnLHeld=false;if(k==='arrowright'||k==='d')btnRHeld=false;});
+
+renderHUD();renderGuide();fitCanvas();startScreen();
+</script>
+</body>
+</html>
